@@ -3,18 +3,27 @@ package mapasci
 import (
 	"fmt"
 	"math"
+	"os"
 	"strings"
 )
 
 const (
 	DefaultVerticalMarginRows  = 2
 	DefaultVerticalPaddingRows = DefaultVerticalMarginRows
+	ansiReset                  = "\x1b[0m"
+	colorModeNever             = "never"
+	colorModeAuto              = "auto"
+	colorModeAlways            = "always"
 )
 
 type RenderOptions struct {
 	VerticalMarginRows  int
 	VerticalPaddingRows int
 	Frame               bool
+	ColorMode           string
+	MapColor            string
+	FrameColor          string
+	MarkerColor         string
 }
 
 type Marker struct {
@@ -70,6 +79,10 @@ func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, char
 
 	verticalMarginRows := DefaultVerticalMarginRows
 	frame := false
+	colorMode := colorModeNever
+	mapColorName := ""
+	frameColorName := ""
+	markerColorName := ""
 	if options != nil {
 		if options.VerticalMarginRows < 0 {
 			return "", fmt.Errorf("vertical margin rows must be >= 0, got %d", options.VerticalMarginRows)
@@ -83,6 +96,30 @@ func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, char
 			verticalMarginRows = options.VerticalPaddingRows
 		}
 		frame = options.Frame
+		if options.ColorMode != "" {
+			colorMode = options.ColorMode
+		}
+		mapColorName = options.MapColor
+		frameColorName = options.FrameColor
+		markerColorName = options.MarkerColor
+	}
+
+	colorEnabled, err := shouldColorize(colorMode)
+	if err != nil {
+		return "", err
+	}
+
+	mapColor, err := colorSequenceForName(mapColorName, "map color")
+	if err != nil {
+		return "", err
+	}
+	frameColor, err := colorSequenceForName(frameColorName, "frame color")
+	if err != nil {
+		return "", err
+	}
+	markerColor, err := colorSequenceForName(markerColorName, "marker color")
+	if err != nil {
+		return "", err
 	}
 
 	mapWidth := size
@@ -122,8 +159,10 @@ func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, char
 		lines = append(lines, line)
 	}
 
+	var markerMask []bool
 	if marker != nil {
-		if err := applyMarker(lines, mapWidth, mapHeight, *marker); err != nil {
+		markerMask, err = applyMarker(lines, mapWidth, mapHeight, *marker)
+		if err != nil {
 			return "", err
 		}
 	}
@@ -135,6 +174,15 @@ func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, char
 		lines = addVerticalMargins(lines, verticalMarginRows)
 	}
 
+	useColor := colorEnabled && (mapColor != "" || frameColor != "" || markerColor != "")
+	if useColor {
+		return buildColoredOutput(lines, mapWidth, mapHeight, verticalMarginRows, frame, markerMask, mapColor, frameColor, markerColor)
+	}
+
+	return buildPlainOutput(lines)
+}
+
+func buildPlainOutput(lines [][]byte) (string, error) {
 	var b strings.Builder
 	for idx, line := range lines {
 		if _, err := b.Write(line); err != nil {
@@ -150,29 +198,191 @@ func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, char
 	return b.String(), nil
 }
 
-func applyMarker(lines [][]byte, mapWidth int, mapHeight int, marker Marker) error {
+func buildColoredOutput(
+	lines [][]byte,
+	mapWidth int,
+	mapHeight int,
+	verticalMarginRows int,
+	frame bool,
+	markerMask []bool,
+	mapColor string,
+	frameColor string,
+	markerColor string,
+) (string, error) {
+	var b strings.Builder
+	for rowIdx, line := range lines {
+		currentColor := ""
+		for colIdx, ch := range line {
+			nextColor := colorForCell(rowIdx, colIdx, mapWidth, mapHeight, verticalMarginRows, frame, markerMask, mapColor, frameColor, markerColor)
+			if nextColor != currentColor {
+				if nextColor == "" {
+					if _, err := b.WriteString(ansiReset); err != nil {
+						return "", err
+					}
+				} else {
+					if _, err := b.WriteString(nextColor); err != nil {
+						return "", err
+					}
+				}
+				currentColor = nextColor
+			}
+
+			if err := b.WriteByte(ch); err != nil {
+				return "", err
+			}
+		}
+
+		if currentColor != "" {
+			if _, err := b.WriteString(ansiReset); err != nil {
+				return "", err
+			}
+		}
+
+		if rowIdx != len(lines)-1 {
+			if err := b.WriteByte('\n'); err != nil {
+				return "", err
+			}
+		}
+	}
+
+	return b.String(), nil
+}
+
+func colorForCell(
+	row int,
+	col int,
+	mapWidth int,
+	mapHeight int,
+	verticalMarginRows int,
+	frame bool,
+	markerMask []bool,
+	mapColor string,
+	frameColor string,
+	markerColor string,
+) string {
+	mapRowStart := verticalMarginRows
+	mapColStart := 0
+	if frame {
+		mapRowStart++
+		mapColStart = 1
+	}
+
+	mapRow := row - mapRowStart
+	mapCol := col - mapColStart
+	inMap := mapRow >= 0 && mapRow < mapHeight && mapCol >= 0 && mapCol < mapWidth
+
+	if inMap && len(markerMask) == mapWidth*mapHeight && markerMask[(mapRow*mapWidth)+mapCol] {
+		if markerColor != "" {
+			return markerColor
+		}
+		return mapColor
+	}
+
+	if frame {
+		frameTopRow := verticalMarginRows
+		frameBottomRow := verticalMarginRows + mapHeight + 1
+		frameRightCol := mapWidth + 1
+		if row >= frameTopRow && row <= frameBottomRow {
+			if row == frameTopRow || row == frameBottomRow || col == 0 || col == frameRightCol {
+				return frameColor
+			}
+		}
+	}
+
+	if inMap {
+		return mapColor
+	}
+
+	return ""
+}
+
+func shouldColorize(mode string) (bool, error) {
+	normalized := strings.ToLower(strings.TrimSpace(mode))
+	switch normalized {
+	case "", colorModeNever:
+		return false, nil
+	case colorModeAlways:
+		return true, nil
+	case colorModeAuto:
+		if os.Getenv("NO_COLOR") != "" {
+			return false, nil
+		}
+
+		term := strings.TrimSpace(os.Getenv("TERM"))
+		if term == "" || term == "dumb" {
+			return false, nil
+		}
+
+		stdoutInfo, err := os.Stdout.Stat()
+		if err != nil {
+			return false, nil
+		}
+
+		return (stdoutInfo.Mode() & os.ModeCharDevice) != 0, nil
+	default:
+		return false, fmt.Errorf("color mode must be one of: never, auto, always")
+	}
+}
+
+func colorSequenceForName(name string, objectName string) (string, error) {
+	if strings.TrimSpace(name) == "" {
+		return "", nil
+	}
+
+	code, ok := ansi16ColorCodes[strings.ToLower(strings.TrimSpace(name))]
+	if !ok {
+		return "", fmt.Errorf("%s must be one of: %s", objectName, ansi16ColorNamesCSV)
+	}
+
+	return "\x1b[" + code + "m", nil
+}
+
+var ansi16ColorCodes = map[string]string{
+	"black":          "30",
+	"red":            "31",
+	"green":          "32",
+	"yellow":         "33",
+	"blue":           "34",
+	"magenta":        "35",
+	"cyan":           "36",
+	"white":          "37",
+	"bright-black":   "90",
+	"bright-red":     "91",
+	"bright-green":   "92",
+	"bright-yellow":  "93",
+	"bright-blue":    "94",
+	"bright-magenta": "95",
+	"bright-cyan":    "96",
+	"bright-white":   "97",
+}
+
+const ansi16ColorNamesCSV = "black, red, green, yellow, blue, magenta, cyan, white, bright-black, bright-red, bright-green, bright-yellow, bright-blue, bright-magenta, bright-cyan, bright-white"
+
+func applyMarker(lines [][]byte, mapWidth int, mapHeight int, marker Marker) ([]bool, error) {
 	if !isFinite(marker.Lon) || !isFinite(marker.Lat) {
-		return fmt.Errorf("marker lon and lat must be finite")
+		return nil, fmt.Errorf("marker lon and lat must be finite")
 	}
 	if marker.ArmX < -1 {
-		return fmt.Errorf("marker ArmX must be >= -1, got %d", marker.ArmX)
+		return nil, fmt.Errorf("marker ArmX must be >= -1, got %d", marker.ArmX)
 	}
 	if marker.ArmY < -1 {
-		return fmt.Errorf("marker ArmY must be >= -1, got %d", marker.ArmY)
+		return nil, fmt.Errorf("marker ArmY must be >= -1, got %d", marker.ArmY)
 	}
 
 	center, err := markerRuneOrDefault(marker.Center, 'O', "marker center")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	horizontal, err := markerRuneOrDefault(marker.Horizontal, '-', "marker horizontal")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	vertical, err := markerRuneOrDefault(marker.Vertical, '|', "marker vertical")
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	markerMask := make([]bool, mapWidth*mapHeight)
 
 	u := math.Mod((marker.Lon+180.0)/360.0, 1.0)
 	if u < 0.0 {
@@ -200,13 +410,16 @@ func applyMarker(lines [][]byte, mapWidth int, mapHeight int, marker Marker) err
 
 	for y := yStart; y <= yEnd; y++ {
 		lines[y][xCenter] = byte(vertical)
+		markerMask[(y*mapWidth)+xCenter] = true
 	}
 	for x := xStart; x <= xEnd; x++ {
 		lines[yCenter][x] = byte(horizontal)
+		markerMask[(yCenter*mapWidth)+x] = true
 	}
 	lines[yCenter][xCenter] = byte(center)
+	markerMask[(yCenter*mapWidth)+xCenter] = true
 
-	return nil
+	return markerMask, nil
 }
 
 func frameLines(lines [][]byte, width int) [][]byte {

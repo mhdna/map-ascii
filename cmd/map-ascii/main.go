@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"unicode/utf8"
 
 	mapascii "github.com/Kivayan/map-ascii"
@@ -26,6 +27,10 @@ func run() error {
 	flag.IntVar(&marginY, "margin-y", mapascii.DefaultVerticalMarginRows, "Empty rows above and below the map (outside the frame)")
 	flag.IntVar(&marginY, "padding-y", mapascii.DefaultVerticalMarginRows, "Deprecated alias for --margin-y")
 	frame := flag.Bool("frame", false, "Draw an ASCII frame around the map")
+	colorMode := flag.String("color", "auto", "Color output mode: never, auto, always")
+	mapColor := flag.String("map-color", "", "Map color name (16 ANSI colors)")
+	frameColor := flag.String("frame-color", "", "Frame color name (16 ANSI colors)")
+	markerColor := flag.String("marker-color", "", "Marker color name (16 ANSI colors)")
 	outputPath := flag.String("output", "", "Optional output text file")
 	maskPath := flag.String("mask", "", "Path to land mask PNG (optional; embedded default is used when omitted)")
 
@@ -62,9 +67,18 @@ func run() error {
 		return err
 	}
 
+	renderColorMode := *colorMode
+	if *outputPath != "" && strings.EqualFold(renderColorMode, "auto") {
+		renderColorMode = "never"
+	}
+
 	asciiMap, err := mapascii.RenderWorldASCIIWithOptions(mask, *size, *supersample, *charAspect, marker, &mapascii.RenderOptions{
 		VerticalMarginRows: marginY,
 		Frame:              *frame,
+		ColorMode:          renderColorMode,
+		MapColor:           *mapColor,
+		FrameColor:         *frameColor,
+		MarkerColor:        *markerColor,
 	})
 	if err != nil {
 		return err

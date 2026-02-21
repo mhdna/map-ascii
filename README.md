@@ -82,6 +82,12 @@ Render with no top/bottom margin and a frame:
 go run ./cmd/map-ascii --size 80 --margin-y 0 --frame
 ```
 
+Render with forced terminal colors:
+
+```bash
+go run ./cmd/map-ascii --size 80 --frame --color always --map-color green --frame-color bright-white --marker-lon -73.9857 --marker-lat 40.7484 --marker-color bright-red
+```
+
 ## Marker overlay
 
 Add a crosshair marker centered on a coordinate:
@@ -97,8 +103,39 @@ Marker options:
 - `--marker-vertical` (default `|`)
 - `--marker-arm-x` (default `-1`, full width)
 - `--marker-arm-y` (default `-1`, full map height)
+- `--marker-color` marker color name (16 ANSI colors)
 
 `--marker-lon` and `--marker-lat` must be provided together.
+
+## Color support
+
+Color output targets ANSI 16-color terminals.
+
+- `--color` controls color mode: `never`, `auto`, `always` (default `auto`)
+- `--map-color` sets the map color
+- `--frame-color` sets the frame color
+- `--marker-color` sets the marker color
+
+When `--color auto` is used, color output is enabled only on terminals that look color-capable. If `NO_COLOR` is set, color is disabled.
+
+Supported color names:
+
+- `black`
+- `red`
+- `green`
+- `yellow`
+- `blue`
+- `magenta`
+- `cyan`
+- `white`
+- `bright-black`
+- `bright-red`
+- `bright-green`
+- `bright-yellow`
+- `bright-blue`
+- `bright-magenta`
+- `bright-cyan`
+- `bright-white`
 
 ## Flags
 
@@ -107,6 +144,10 @@ Marker options:
 - `--char-aspect` character height/width ratio used to derive map height (default `2.0`)
 - `--margin-y` empty rows above and below the map (outside the frame) (default `2`)
 - `--frame` draw an ASCII frame around the output (default `false`)
+- `--color` color output mode: `never`, `auto`, `always` (default `auto`)
+- `--map-color` map color name (16 ANSI colors)
+- `--frame-color` frame color name (16 ANSI colors)
+- `--marker-color` marker color name (16 ANSI colors)
 - `--mask` path to a PNG land mask (optional; defaults to local `data/landmask_3600x1800.png` with embedded fallback)
 - `--output` optional output text file
 
