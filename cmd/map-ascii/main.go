@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"unicode/utf8"
 
-	mapascii "map-ascii-go/internal"
+	mapascii "github.com/Kivayan/map-ascii"
 )
 
 func main() {
@@ -19,13 +19,11 @@ func main() {
 }
 
 func run() error {
-	defaultMaskPath := resolveDefaultMaskPath()
-
 	size := flag.Int("size", 60, "Map width in characters")
 	supersample := flag.Int("supersample", 3, "NxN supersampling per ASCII cell")
 	charAspect := flag.Float64("char-aspect", 2.0, "Character height/width ratio used for output height")
 	outputPath := flag.String("output", "", "Optional output text file")
-	maskPath := flag.String("mask", defaultMaskPath, "Path to land mask PNG")
+	maskPath := flag.String("mask", "", "Path to land mask PNG (optional; embedded default is used when omitted)")
 
 	markerLon := flag.Float64("marker-lon", math.NaN(), "Marker longitude")
 	markerLat := flag.Float64("marker-lat", math.NaN(), "Marker latitude")
@@ -47,7 +45,7 @@ func run() error {
 		return fmt.Errorf("char-aspect must be > 0, got %v", *charAspect)
 	}
 
-	mask, err := mapascii.LoadLandMask(*maskPath)
+	mask, err := loadMask(*maskPath)
 	if err != nil {
 		return err
 	}
@@ -145,20 +143,25 @@ func parseSingleRune(raw string, flagName string) (rune, error) {
 	return r, nil
 }
 
-func resolveDefaultMaskPath() string {
-	candidates := []string{
-		"data/landmask_3600x1800.png",
-		"../data/landmask_3600x1800.png",
-		"../../data/landmask_3600x1800.png",
-	}
-
-	for _, candidate := range candidates {
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
+func loadMask(maskPath string) (*mapascii.LandMask, error) {
+	if maskPath != "" {
+		mask, err := mapascii.LoadLandMask(maskPath)
+		if err != nil {
+			return nil, err
 		}
+		return mask, nil
 	}
 
-	return candidates[0]
+	mask, err := mapascii.LoadLandMask("data/landmask_3600x1800.png")
+	if err == nil {
+		return mask, nil
+	}
+
+	mask, embeddedErr := mapascii.LoadEmbeddedDefaultLandMask()
+	if embeddedErr != nil {
+		return nil, fmt.Errorf("load default mask: %w", embeddedErr)
+	}
+	return mask, nil
 }
 
 func isFinite(value float64) bool {

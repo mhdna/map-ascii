@@ -2,6 +2,49 @@
 
 Go CLI for generating an ASCII world map from a pre-generated PNG land mask.
 
+Module path: `github.com/Kivayan/map-ascii`
+
+## Install CLI
+
+```bash
+go install github.com/Kivayan/map-ascii/cmd/map-ascii@latest
+```
+
+Then run:
+
+```bash
+map-ascii --size 60 --supersample 3
+```
+
+## Library usage
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+
+	mapascii "github.com/Kivayan/map-ascii"
+)
+
+func main() {
+	mask, err := mapascii.LoadEmbeddedDefaultLandMask()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	out, err := mapascii.RenderWorldASCII(mask, 80, 3, 2.0, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(out)
+}
+```
+
+You can also load a PNG mask from disk with `mapascii.LoadLandMask("path/to/mask.png")`.
+
 ## Quick start
 
 Render to stdout:
@@ -19,7 +62,7 @@ go run ./cmd/map-ascii --size 120 --supersample 3 --output out/world_120.txt
 Use a specific mask:
 
 ```bash
-go run ./cmd/map-ascii --mask data/landmask_1800x900.png --size 120
+go run ./cmd/map-ascii --mask data/landmask_3600x1800.png --size 120
 ```
 
 ## Marker overlay
@@ -45,7 +88,7 @@ Marker options:
 - `--size` map width in characters (default `60`)
 - `--supersample` `N x N` supersampling per character cell (default `3`)
 - `--char-aspect` character height/width ratio used to derive map height (default `2.0`)
-- `--mask` path to a PNG land mask (default auto-detected `3600x1800` mask)
+- `--mask` path to a PNG land mask (optional; defaults to local `data/landmask_3600x1800.png` with embedded fallback)
 - `--output` optional output text file
 
 ## Notes

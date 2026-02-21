@@ -7,7 +7,7 @@ Follow this document unless the user gives explicit overrides.
 ## Project Summary
 
 - Language: Go (`go 1.22` in `go.mod`).
-- Module path: `map-ascii-go`.
+- Module path: `github.com/Kivayan/map-ascii`.
 - App type: CLI that renders an ASCII world map from a PNG land mask.
 - Entrypoint: `cmd/map-ascii/main.go`.
 - Core logic: `internal/mask.go` and `internal/render.go`.
@@ -34,7 +34,7 @@ Follow this document unless the user gives explicit overrides.
 
 - Run CLI quickly: `go run ./cmd/map-ascii --size 60 --supersample 3`
 - Run with marker: `go run ./cmd/map-ascii --size 120 --marker-lon -73.9857 --marker-lat 40.7484`
-- Run with explicit mask: `go run ./cmd/map-ascii --mask data/landmask_1800x900.png --size 120`
+- Run with explicit mask: `go run ./cmd/map-ascii --mask data/landmask_3600x1800.png --size 120`
 - Write output file: `go run ./cmd/map-ascii --size 120 --output out/world_120.txt`
 - Build command binary: `go build ./cmd/map-ascii`
 - Build all packages: `go build ./...`
