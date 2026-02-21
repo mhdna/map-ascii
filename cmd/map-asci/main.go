@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"unicode/utf8"
 
-	"map-asci-go/internal/mapasci"
+	mapasci "map-asci-go/internal"
 )
 
 func main() {
@@ -147,8 +147,9 @@ func parseSingleRune(raw string, flagName string) (rune, error) {
 
 func resolveDefaultMaskPath() string {
 	candidates := []string{
-		"../data/masks/landmask_3600x1800.png",
 		"data/masks/landmask_3600x1800.png",
+		"../data/masks/landmask_3600x1800.png",
+		"../../data/masks/landmask_3600x1800.png",
 	}
 
 	for _, candidate := range candidates {
