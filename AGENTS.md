@@ -1,22 +1,22 @@
 # AGENTS.md
 
-This file is for autonomous coding agents working in `map-asci`.
+This file is for autonomous coding agents working in `map-ascii`.
 It captures repo-specific commands and coding conventions.
 Follow this document unless the user gives explicit overrides.
 
 ## Project Summary
 
 - Language: Go (`go 1.22` in `go.mod`).
-- Module path: `map-asci-go`.
+- Module path: `map-ascii-go`.
 - App type: CLI that renders an ASCII world map from a PNG land mask.
-- Entrypoint: `cmd/map-asci/main.go`.
+- Entrypoint: `cmd/map-ascii/main.go`.
 - Core logic: `internal/mask.go` and `internal/render.go`.
-- Default mask path: `data/masks/landmask_3600x1800.png`.
+- Default mask path: `data/landmask_3600x1800.png`.
 - Output artifacts are typically written under `out/`.
 
 ## Repository Layout
 
-- `cmd/map-asci/main.go`: flag parsing, argument validation, I/O orchestration.
+- `cmd/map-ascii/main.go`: flag parsing, argument validation, I/O orchestration.
 - `internal/mask.go`: mask loading, validation, lon/lat sampling.
 - `internal/render.go`: ASCII generation, marker drawing, char mapping.
 - `data/`: static assets (mask PNG files).
@@ -32,11 +32,11 @@ Follow this document unless the user gives explicit overrides.
 
 ## Build and Run Commands
 
-- Run CLI quickly: `go run ./cmd/map-asci --size 60 --supersample 3`
-- Run with marker: `go run ./cmd/map-asci --size 120 --marker-lon -73.9857 --marker-lat 40.7484`
-- Run with explicit mask: `go run ./cmd/map-asci --mask data/masks/landmask_1800x900.png --size 120`
-- Write output file: `go run ./cmd/map-asci --size 120 --output out/world_120.txt`
-- Build command binary: `go build ./cmd/map-asci`
+- Run CLI quickly: `go run ./cmd/map-ascii --size 60 --supersample 3`
+- Run with marker: `go run ./cmd/map-ascii --size 120 --marker-lon -73.9857 --marker-lat 40.7484`
+- Run with explicit mask: `go run ./cmd/map-ascii --mask data/landmask_1800x900.png --size 120`
+- Write output file: `go run ./cmd/map-ascii --size 120 --output out/world_120.txt`
+- Build command binary: `go build ./cmd/map-ascii`
 - Build all packages: `go build ./...`
 
 ## Lint / Static Checks
@@ -85,7 +85,7 @@ Use idiomatic Go and preserve existing conventions.
 
 ## CLI and I/O Practices
 
-- Keep flag parsing/wiring in `cmd/map-asci/main.go`.
+- Keep flag parsing/wiring in `cmd/map-ascii/main.go`.
 - Keep rendering and sampling logic in `internal/`.
 - Create parent directories before writes (`os.MkdirAll`).
 - Use explicit file permissions (`0o644` for outputs).

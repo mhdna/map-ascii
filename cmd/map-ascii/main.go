@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"unicode/utf8"
 
-	mapasci "map-asci-go/internal"
+	mapascii "map-ascii-go/internal"
 )
 
 func main() {
@@ -47,7 +47,7 @@ func run() error {
 		return fmt.Errorf("char-aspect must be > 0, got %v", *charAspect)
 	}
 
-	mask, err := mapasci.LoadLandMask(*maskPath)
+	mask, err := mapascii.LoadLandMask(*maskPath)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func run() error {
 		return err
 	}
 
-	asciiMap, err := mapasci.RenderWorldASCII(mask, *size, *supersample, *charAspect, marker)
+	asciiMap, err := mapascii.RenderWorldASCII(mask, *size, *supersample, *charAspect, marker)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func buildMarker(
 	verticalRaw string,
 	armX int,
 	armY int,
-) (*mapasci.Marker, error) {
+) (*mapascii.Marker, error) {
 	hasLon := isFinite(lon)
 	hasLat := isFinite(lat)
 
@@ -119,7 +119,7 @@ func buildMarker(
 		return nil, fmt.Errorf("marker-arm-y must be >= -1, got %d", armY)
 	}
 
-	return &mapasci.Marker{
+	return &mapascii.Marker{
 		Lon:        lon,
 		Lat:        lat,
 		Center:     center,
@@ -147,9 +147,9 @@ func parseSingleRune(raw string, flagName string) (rune, error) {
 
 func resolveDefaultMaskPath() string {
 	candidates := []string{
-		"data/masks/landmask_3600x1800.png",
-		"../data/masks/landmask_3600x1800.png",
-		"../../data/masks/landmask_3600x1800.png",
+		"data/landmask_3600x1800.png",
+		"../data/landmask_3600x1800.png",
+		"../../data/landmask_3600x1800.png",
 	}
 
 	for _, candidate := range candidates {

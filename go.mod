@@ -1,3 +1,3 @@
-module map-asci-go
+module map-ascii-go
 
 go 1.22

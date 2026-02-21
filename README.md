@@ -1,4 +1,4 @@
-# map-asci
+# map-ascii
 
 Go CLI for generating an ASCII world map from a pre-generated PNG land mask.
 
@@ -7,19 +7,19 @@ Go CLI for generating an ASCII world map from a pre-generated PNG land mask.
 Render to stdout:
 
 ```bash
-go run ./cmd/map-asci --size 60 --supersample 3
+go run ./cmd/map-ascii --size 60 --supersample 3
 ```
 
 Render to a file:
 
 ```bash
-go run ./cmd/map-asci --size 120 --supersample 3 --output out/world_120.txt
+go run ./cmd/map-ascii --size 120 --supersample 3 --output out/world_120.txt
 ```
 
 Use a specific mask:
 
 ```bash
-go run ./cmd/map-asci --mask data/masks/landmask_1800x900.png --size 120
+go run ./cmd/map-ascii --mask data/landmask_1800x900.png --size 120
 ```
 
 ## Marker overlay
@@ -27,7 +27,7 @@ go run ./cmd/map-asci --mask data/masks/landmask_1800x900.png --size 120
 Add a crosshair marker centered on a coordinate:
 
 ```bash
-go run ./cmd/map-asci --size 120 --marker-lon -73.9857 --marker-lat 40.7484
+go run ./cmd/map-ascii --size 120 --marker-lon -73.9857 --marker-lat 40.7484
 ```
 
 Marker options:
