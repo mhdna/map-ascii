@@ -7,8 +7,15 @@ import (
 )
 
 const (
-	VerticalPaddingRows = 2
+	DefaultVerticalMarginRows  = 2
+	DefaultVerticalPaddingRows = DefaultVerticalMarginRows
 )
+
+type RenderOptions struct {
+	VerticalMarginRows  int
+	VerticalPaddingRows int
+	Frame               bool
+}
 
 type Marker struct {
 	Lon        float64
@@ -44,6 +51,10 @@ func CharForLandFraction(fraction float64) (byte, error) {
 }
 
 func RenderWorldASCII(mask *LandMask, size int, supersample int, charAspect float64, marker *Marker) (string, error) {
+	return RenderWorldASCIIWithOptions(mask, size, supersample, charAspect, marker, nil)
+}
+
+func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, charAspect float64, marker *Marker, options *RenderOptions) (string, error) {
 	if err := validateMask(mask); err != nil {
 		return "", err
 	}
@@ -57,6 +68,23 @@ func RenderWorldASCII(mask *LandMask, size int, supersample int, charAspect floa
 		return "", fmt.Errorf("char_aspect must be > 0, got %v", charAspect)
 	}
 
+	verticalMarginRows := DefaultVerticalMarginRows
+	frame := false
+	if options != nil {
+		if options.VerticalMarginRows < 0 {
+			return "", fmt.Errorf("vertical margin rows must be >= 0, got %d", options.VerticalMarginRows)
+		}
+		if options.VerticalPaddingRows < 0 {
+			return "", fmt.Errorf("vertical padding rows must be >= 0, got %d", options.VerticalPaddingRows)
+		}
+		if options.VerticalMarginRows != 0 {
+			verticalMarginRows = options.VerticalMarginRows
+		} else {
+			verticalMarginRows = options.VerticalPaddingRows
+		}
+		frame = options.Frame
+	}
+
 	mapWidth := size
 	mapHeight := int(math.Round(float64(mapWidth) / (2.0 * charAspect)))
 	if mapHeight <= 0 {
@@ -64,19 +92,10 @@ func RenderWorldASCII(mask *LandMask, size int, supersample int, charAspect floa
 	}
 
 	subsamplesPerCell := supersample * supersample
-	totalRows := mapHeight + (2 * VerticalPaddingRows)
-	lines := make([][]byte, 0, totalRows)
+	lines := make([][]byte, 0, mapHeight)
 
-	for row := 0; row < totalRows; row++ {
+	for row := 0; row < mapHeight; row++ {
 		line := make([]byte, mapWidth)
-		if row < VerticalPaddingRows || row >= totalRows-VerticalPaddingRows {
-			for i := range line {
-				line[i] = ' '
-			}
-			lines = append(lines, line)
-			continue
-		}
-
 		for col := 0; col < mapWidth; col++ {
 			landSum := 0.0
 			for sy := 0; sy < supersample; sy++ {
@@ -85,8 +104,7 @@ func RenderWorldASCII(mask *LandMask, size int, supersample int, charAspect floa
 					y := float64(row) + (float64(sy)+0.5)/float64(supersample)
 
 					lon := (x/float64(mapWidth))*360.0 - 180.0
-					yActive := y - float64(VerticalPaddingRows)
-					t := yActive / float64(mapHeight)
+					t := y / float64(mapHeight)
 					lat := 90.0 - (180.0 * t)
 
 					landSum += sampleLandValueUnchecked(mask, lon, lat)
@@ -108,6 +126,13 @@ func RenderWorldASCII(mask *LandMask, size int, supersample int, charAspect floa
 		if err := applyMarker(lines, mapWidth, mapHeight, *marker); err != nil {
 			return "", err
 		}
+	}
+
+	if frame {
+		lines = frameLines(lines, mapWidth)
+	}
+	if verticalMarginRows > 0 {
+		lines = addVerticalMargins(lines, verticalMarginRows)
 	}
 
 	var b strings.Builder
@@ -157,7 +182,7 @@ func applyMarker(lines [][]byte, mapWidth int, mapHeight int, marker Marker) err
 
 	xCenter := int(math.Round(u * float64(mapWidth-1)))
 	yCenterActive := int(math.Round(v * float64(mapHeight-1)))
-	yCenter := yCenterActive + VerticalPaddingRows
+	yCenter := yCenterActive
 
 	xStart := 0
 	xEnd := mapWidth - 1
@@ -166,11 +191,11 @@ func applyMarker(lines [][]byte, mapWidth int, mapHeight int, marker Marker) err
 		xEnd = min(mapWidth-1, xCenter+marker.ArmX)
 	}
 
-	yStart := VerticalPaddingRows
-	yEnd := VerticalPaddingRows + mapHeight - 1
+	yStart := 0
+	yEnd := mapHeight - 1
 	if marker.ArmY >= 0 {
-		yStart = max(VerticalPaddingRows, yCenter-marker.ArmY)
-		yEnd = min(VerticalPaddingRows+mapHeight-1, yCenter+marker.ArmY)
+		yStart = max(0, yCenter-marker.ArmY)
+		yEnd = min(mapHeight-1, yCenter+marker.ArmY)
 	}
 
 	for y := yStart; y <= yEnd; y++ {
@@ -182,6 +207,45 @@ func applyMarker(lines [][]byte, mapWidth int, mapHeight int, marker Marker) err
 	lines[yCenter][xCenter] = byte(center)
 
 	return nil
+}
+
+func frameLines(lines [][]byte, width int) [][]byte {
+	framed := make([][]byte, 0, len(lines)+2)
+
+	top := make([]byte, width+2)
+	top[0] = '+'
+	top[len(top)-1] = '+'
+	for i := 1; i < len(top)-1; i++ {
+		top[i] = '-'
+	}
+	framed = append(framed, top)
+
+	for _, line := range lines {
+		framedLine := make([]byte, width+2)
+		framedLine[0] = '|'
+		copy(framedLine[1:], line)
+		framedLine[len(framedLine)-1] = '|'
+		framed = append(framed, framedLine)
+	}
+
+	bottom := make([]byte, width+2)
+	copy(bottom, top)
+	framed = append(framed, bottom)
+
+	return framed
+}
+
+func addVerticalMargins(lines [][]byte, marginRows int) [][]byte {
+	withMargins := make([][]byte, 0, len(lines)+(2*marginRows))
+	for i := 0; i < marginRows; i++ {
+		withMargins = append(withMargins, []byte{})
+	}
+	withMargins = append(withMargins, lines...)
+	for i := 0; i < marginRows; i++ {
+		withMargins = append(withMargins, []byte{})
+	}
+
+	return withMargins
 }
 
 func markerRuneOrDefault(value rune, fallback rune, name string) (rune, error) {

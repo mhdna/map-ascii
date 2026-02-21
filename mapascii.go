@@ -18,7 +18,12 @@ type LandMask = internal.LandMask
 
 type Marker = internal.Marker
 
-const VerticalPaddingRows = internal.VerticalPaddingRows
+type RenderOptions = internal.RenderOptions
+
+const DefaultVerticalMarginRows = internal.DefaultVerticalMarginRows
+const VerticalMarginRows = internal.DefaultVerticalMarginRows
+const DefaultVerticalPaddingRows = internal.DefaultVerticalPaddingRows
+const VerticalPaddingRows = internal.DefaultVerticalPaddingRows
 
 func LoadLandMask(maskPath string) (*LandMask, error) {
 	return internal.LoadLandMask(maskPath)
@@ -58,4 +63,8 @@ func CharForLandFraction(fraction float64) (byte, error) {
 
 func RenderWorldASCII(mask *LandMask, size int, supersample int, charAspect float64, marker *Marker) (string, error) {
 	return internal.RenderWorldASCII(mask, size, supersample, charAspect, marker)
+}
+
+func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, charAspect float64, marker *Marker, options *RenderOptions) (string, error) {
+	return internal.RenderWorldASCIIWithOptions(mask, size, supersample, charAspect, marker, options)
 }

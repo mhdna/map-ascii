@@ -22,6 +22,10 @@ func run() error {
 	size := flag.Int("size", 60, "Map width in characters")
 	supersample := flag.Int("supersample", 3, "NxN supersampling per ASCII cell")
 	charAspect := flag.Float64("char-aspect", 2.0, "Character height/width ratio used for output height")
+	marginY := mapascii.DefaultVerticalMarginRows
+	flag.IntVar(&marginY, "margin-y", mapascii.DefaultVerticalMarginRows, "Empty rows above and below the map (outside the frame)")
+	flag.IntVar(&marginY, "padding-y", mapascii.DefaultVerticalMarginRows, "Deprecated alias for --margin-y")
+	frame := flag.Bool("frame", false, "Draw an ASCII frame around the map")
 	outputPath := flag.String("output", "", "Optional output text file")
 	maskPath := flag.String("mask", "", "Path to land mask PNG (optional; embedded default is used when omitted)")
 
@@ -44,6 +48,9 @@ func run() error {
 	if !isFinite(*charAspect) || *charAspect <= 0.0 {
 		return fmt.Errorf("char-aspect must be > 0, got %v", *charAspect)
 	}
+	if marginY < 0 {
+		return fmt.Errorf("margin-y must be >= 0, got %d", marginY)
+	}
 
 	mask, err := loadMask(*maskPath)
 	if err != nil {
@@ -55,7 +62,10 @@ func run() error {
 		return err
 	}
 
-	asciiMap, err := mapascii.RenderWorldASCII(mask, *size, *supersample, *charAspect, marker)
+	asciiMap, err := mapascii.RenderWorldASCIIWithOptions(mask, *size, *supersample, *charAspect, marker, &mapascii.RenderOptions{
+		VerticalMarginRows: marginY,
+		Frame:              *frame,
+	})
 	if err != nil {
 		return err
 	}

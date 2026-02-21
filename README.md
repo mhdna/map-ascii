@@ -45,6 +45,17 @@ func main() {
 
 You can also load a PNG mask from disk with `mapascii.LoadLandMask("path/to/mask.png")`.
 
+For custom margin and optional framing:
+
+```go
+options := &mapascii.RenderOptions{
+	VerticalMarginRows: 2,
+	Frame:              true,
+}
+
+out, err := mapascii.RenderWorldASCIIWithOptions(mask, 80, 3, 2.0, nil, options)
+```
+
 ## Quick start
 
 Render to stdout:
@@ -63,6 +74,12 @@ Use a specific mask:
 
 ```bash
 go run ./cmd/map-ascii --mask data/landmask_3600x1800.png --size 120
+```
+
+Render with no top/bottom margin and a frame:
+
+```bash
+go run ./cmd/map-ascii --size 80 --margin-y 0 --frame
 ```
 
 ## Marker overlay
@@ -88,6 +105,8 @@ Marker options:
 - `--size` map width in characters (default `60`)
 - `--supersample` `N x N` supersampling per character cell (default `3`)
 - `--char-aspect` character height/width ratio used to derive map height (default `2.0`)
+- `--margin-y` empty rows above and below the map (outside the frame) (default `2`)
+- `--frame` draw an ASCII frame around the output (default `false`)
 - `--mask` path to a PNG land mask (optional; defaults to local `data/landmask_3600x1800.png` with embedded fallback)
 - `--output` optional output text file
 
@@ -96,4 +115,5 @@ Marker options:
 - Expected mask alignment:
   - x-axis maps lon `-180..180`
   - y-axis maps lat `90..-90`
-- Output keeps fixed vertical padding of 2 empty rows at top and bottom.
+- By default output has 2 empty rows of top/bottom margin; use `--margin-y` to change it.
+- Use `--frame` to wrap the output in `+---+` and `|   |` style borders.
