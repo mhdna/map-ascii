@@ -2,6 +2,7 @@ package mapascii
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"fmt"
 	"image"
@@ -20,10 +21,20 @@ type Marker = internal.Marker
 
 type RenderOptions = internal.RenderOptions
 
+type AnimationStyle = internal.AnimationStyle
+
+type AnimationOptions = internal.AnimationOptions
+
+type Frame = internal.Frame
+
 const DefaultVerticalMarginRows = internal.DefaultVerticalMarginRows
 const VerticalMarginRows = internal.DefaultVerticalMarginRows
 const DefaultVerticalPaddingRows = internal.DefaultVerticalPaddingRows
 const VerticalPaddingRows = internal.DefaultVerticalPaddingRows
+const DefaultAnimationFPS = internal.DefaultAnimationFPS
+
+const AnimationStylePulseColor = internal.AnimationStylePulseColor
+const AnimationStyleBlink = internal.AnimationStyleBlink
 
 func LoadLandMask(maskPath string) (*LandMask, error) {
 	return internal.LoadLandMask(maskPath)
@@ -67,4 +78,18 @@ func RenderWorldASCII(mask *LandMask, size int, supersample int, charAspect floa
 
 func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, charAspect float64, marker *Marker, options *RenderOptions) (string, error) {
 	return internal.RenderWorldASCIIWithOptions(mask, size, supersample, charAspect, marker, options)
+}
+
+func StreamWorldASCIIAnimation(
+	ctx context.Context,
+	mask *LandMask,
+	size int,
+	supersample int,
+	charAspect float64,
+	marker *Marker,
+	renderOpts *RenderOptions,
+	animOpts *AnimationOptions,
+	emit func(Frame) error,
+) error {
+	return internal.StreamWorldASCIIAnimation(ctx, mask, size, supersample, charAspect, marker, renderOpts, animOpts, emit)
 }

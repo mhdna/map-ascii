@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"math"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
@@ -41,6 +44,10 @@ func run() error {
 	markerVertical := flag.String("marker-vertical", "|", "Marker vertical character")
 	markerArmX := flag.Int("marker-arm-x", -1, "Horizontal arm length in characters (-1 for full width)")
 	markerArmY := flag.Int("marker-arm-y", -1, "Vertical arm length in characters (-1 for full map height)")
+	animateMarker := flag.Bool("animate-marker", false, "Animate marker output in terminal")
+	animateFPS := flag.Int("animate-fps", mapascii.DefaultAnimationFPS, "Animation refresh rate in frames per second")
+	animateStyle := flag.String("animate-style", string(mapascii.AnimationStylePulseColor), "Animation style: pulse-color, blink")
+	animateDuration := flag.Duration("animate-duration", 0, "Animation duration (for example: 10s, 2m). 0 means run until interrupted")
 
 	flag.Parse()
 
@@ -71,15 +78,54 @@ func run() error {
 	if *outputPath != "" && strings.EqualFold(renderColorMode, "auto") {
 		renderColorMode = "never"
 	}
-
-	asciiMap, err := mapascii.RenderWorldASCIIWithOptions(mask, *size, *supersample, *charAspect, marker, &mapascii.RenderOptions{
+	renderOptions := &mapascii.RenderOptions{
 		VerticalMarginRows: marginY,
 		Frame:              *frame,
 		ColorMode:          renderColorMode,
 		MapColor:           *mapColor,
 		FrameColor:         *frameColor,
 		MarkerColor:        *markerColor,
-	})
+	}
+
+	if *animateMarker {
+		if *outputPath != "" {
+			return fmt.Errorf("animate-marker cannot be used with output file")
+		}
+		if marker == nil {
+			return fmt.Errorf("animate-marker requires marker-lon and marker-lat")
+		}
+		if !stdoutIsTTY() {
+			return fmt.Errorf("animate-marker requires a TTY stdout")
+		}
+
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+
+		writer := &terminalFrameWriter{}
+		defer writer.Close()
+
+		err := mapascii.StreamWorldASCIIAnimation(
+			ctx,
+			mask,
+			*size,
+			*supersample,
+			*charAspect,
+			marker,
+			renderOptions,
+			&mapascii.AnimationOptions{
+				FPS:      *animateFPS,
+				Style:    mapascii.AnimationStyle(*animateStyle),
+				Duration: *animateDuration,
+			},
+			writer.Emit,
+		)
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
+		return err
+	}
+
+	asciiMap, err := mapascii.RenderWorldASCIIWithOptions(mask, *size, *supersample, *charAspect, marker, renderOptions)
 	if err != nil {
 		return err
 	}
@@ -190,4 +236,49 @@ func loadMask(maskPath string) (*mapascii.LandMask, error) {
 
 func isFinite(value float64) bool {
 	return !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+type terminalFrameWriter struct {
+	initialized bool
+	lineCount   int
+}
+
+func (w *terminalFrameWriter) Emit(frame mapascii.Frame) error {
+	if !w.initialized {
+		if _, err := fmt.Fprint(os.Stdout, "\x1b[?25l"); err != nil {
+			return err
+		}
+		w.initialized = true
+	} else if w.lineCount > 1 {
+		if _, err := fmt.Fprintf(os.Stdout, "\r\x1b[%dA", w.lineCount-1); err != nil {
+			return err
+		}
+	} else {
+		if _, err := fmt.Fprint(os.Stdout, "\r"); err != nil {
+			return err
+		}
+	}
+
+	if _, err := fmt.Fprint(os.Stdout, frame.Text); err != nil {
+		return err
+	}
+
+	w.lineCount = strings.Count(frame.Text, "\n") + 1
+	return nil
+}
+
+func (w *terminalFrameWriter) Close() {
+	if !w.initialized {
+		return
+	}
+	_, _ = fmt.Fprint(os.Stdout, "\x1b[0m\x1b[?25h\n")
+}
+
+func stdoutIsTTY() bool {
+	stdoutInfo, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+
+	return (stdoutInfo.Mode() & os.ModeCharDevice) != 0
 }

@@ -56,6 +56,30 @@ options := &mapascii.RenderOptions{
 out, err := mapascii.RenderWorldASCIIWithOptions(mask, 80, 3, 2.0, nil, options)
 ```
 
+Stream animated frames with a callback (import `context` in your program):
+
+```go
+animOptions := &mapascii.AnimationOptions{
+	FPS:   2,
+	Style: mapascii.AnimationStylePulseColor,
+}
+
+err = mapascii.StreamWorldASCIIAnimation(
+	context.Background(),
+	mask,
+	80,
+	3,
+	2.0,
+	&mapascii.Marker{Lon: -73.9857, Lat: 40.7484},
+	&mapascii.RenderOptions{ColorMode: "always"},
+	animOptions,
+	func(frame mapascii.Frame) error {
+		fmt.Print(frame.Text)
+		return nil
+	},
+)
+```
+
 ## Quick start
 
 Render to stdout:
@@ -88,6 +112,12 @@ Render with forced terminal colors:
 go run ./cmd/map-ascii --size 80 --frame --color always --map-color green --frame-color bright-white --marker-lon -73.9857 --marker-lat 40.7484 --marker-color bright-red
 ```
 
+Animate a marker in the terminal (Ctrl+C to stop):
+
+```bash
+go run ./cmd/map-ascii --size 80 --frame --color auto --marker-lon -73.9857 --marker-lat 40.7484 --animate-marker --animate-style pulse-color --animate-fps 2
+```
+
 ## Marker overlay
 
 Add a crosshair marker centered on a coordinate:
@@ -104,8 +134,14 @@ Marker options:
 - `--marker-arm-x` (default `-1`, full width)
 - `--marker-arm-y` (default `-1`, full map height)
 - `--marker-color` marker color name (16 ANSI colors)
+- `--animate-marker` animate marker output (TTY stdout only)
+- `--animate-fps` animation refresh rate in frames per second (default `2`)
+- `--animate-style` animation style: `pulse-color`, `blink` (default `pulse-color`)
+- `--animate-duration` animation duration (for example `10s`, `2m`); `0` runs until interrupted
 
 `--marker-lon` and `--marker-lat` must be provided together.
+
+`--animate-marker` requires marker coordinates and cannot be used with `--output`.
 
 ## Color support
 
@@ -148,6 +184,10 @@ Supported color names:
 - `--map-color` map color name (16 ANSI colors)
 - `--frame-color` frame color name (16 ANSI colors)
 - `--marker-color` marker color name (16 ANSI colors)
+- `--animate-marker` animate marker output (TTY stdout only)
+- `--animate-fps` animation refresh rate in frames per second (default `2`)
+- `--animate-style` animation style: `pulse-color`, `blink` (default `pulse-color`)
+- `--animate-duration` animation duration (`0` means until interrupted)
 - `--mask` path to a PNG land mask (optional; defaults to local `data/landmask_3600x1800.png` with embedded fallback)
 - `--output` optional output text file
 
