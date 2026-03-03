@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -27,6 +28,7 @@ func run() error {
 	supersample := flag.Int("supersample", 3, "NxN supersampling per ASCII cell")
 	charAspect := flag.Float64("char-aspect", 2.0, "Character height/width ratio used for output height")
 	marginY := mapascii.DefaultVerticalMarginRows
+	continentChoices := mapascii.ContinentNamesCSV()
 	flag.IntVar(&marginY, "margin-y", mapascii.DefaultVerticalMarginRows, "Empty rows above and below the map (outside the frame)")
 	flag.IntVar(&marginY, "padding-y", mapascii.DefaultVerticalMarginRows, "Deprecated alias for --margin-y")
 	frame := flag.Bool("frame", false, "Draw an ASCII frame around the map")
@@ -36,6 +38,8 @@ func run() error {
 	markerColor := flag.String("marker-color", "", "Marker color name (16 ANSI colors)")
 	outputPath := flag.String("output", "", "Optional output text file")
 	maskPath := flag.String("mask", "", "Path to land mask PNG (optional; embedded default is used when omitted)")
+	continent := flag.String("continent", "", "Continent preset viewport: "+continentChoices)
+	bbox := flag.String("bbox", "", "Viewport bounding box as minLon,minLat,maxLon,maxLat")
 
 	markerLon := flag.Float64("marker-lon", math.NaN(), "Marker longitude")
 	markerLat := flag.Float64("marker-lat", math.NaN(), "Marker latitude")
@@ -74,6 +78,11 @@ func run() error {
 		return err
 	}
 
+	viewport, err := buildViewport(*continent, *bbox)
+	if err != nil {
+		return err
+	}
+
 	renderColorMode := *colorMode
 	if *outputPath != "" && strings.EqualFold(renderColorMode, "auto") {
 		renderColorMode = "never"
@@ -85,6 +94,7 @@ func run() error {
 		MapColor:           *mapColor,
 		FrameColor:         *frameColor,
 		MarkerColor:        *markerColor,
+		Viewport:           viewport,
 	}
 
 	if *animateMarker {
@@ -232,6 +242,57 @@ func loadMask(maskPath string) (*mapascii.LandMask, error) {
 		return nil, fmt.Errorf("load default mask: %w", embeddedErr)
 	}
 	return mask, nil
+}
+
+func buildViewport(continentRaw string, bboxRaw string) (*mapascii.Viewport, error) {
+	continent := strings.TrimSpace(continentRaw)
+	bbox := strings.TrimSpace(bboxRaw)
+
+	if continent != "" && bbox != "" {
+		return nil, fmt.Errorf("continent and bbox cannot be used together")
+	}
+
+	if bbox != "" {
+		viewport, err := parseBBox(bbox)
+		if err != nil {
+			return nil, err
+		}
+		return viewport, nil
+	}
+
+	if continent == "" {
+		return nil, nil
+	}
+
+	viewport, err := mapascii.ViewportForContinent(continent)
+	if err != nil {
+		return nil, err
+	}
+
+	return &viewport, nil
+}
+
+func parseBBox(raw string) (*mapascii.Viewport, error) {
+	parts := strings.Split(raw, ",")
+	if len(parts) != 4 {
+		return nil, fmt.Errorf("bbox must be minLon,minLat,maxLon,maxLat")
+	}
+
+	values := make([]float64, 4)
+	for idx, part := range parts {
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(part), 64)
+		if err != nil {
+			return nil, fmt.Errorf("bbox value %q is not a valid number: %w", strings.TrimSpace(part), err)
+		}
+		values[idx] = parsed
+	}
+
+	return &mapascii.Viewport{
+		MinLon: values[0],
+		MinLat: values[1],
+		MaxLon: values[2],
+		MaxLat: values[3],
+	}, nil
 }
 
 func isFinite(value float64) bool {

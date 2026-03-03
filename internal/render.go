@@ -24,6 +24,14 @@ type RenderOptions struct {
 	MapColor            string
 	FrameColor          string
 	MarkerColor         string
+	Viewport            *Viewport
+}
+
+type Viewport struct {
+	MinLon float64
+	MinLat float64
+	MaxLon float64
+	MaxLat float64
 }
 
 type Marker struct {
@@ -83,6 +91,7 @@ func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, char
 	mapColorName := ""
 	frameColorName := ""
 	markerColorName := ""
+	viewport := defaultWorldViewport()
 	if options != nil {
 		if options.VerticalMarginRows < 0 {
 			return "", fmt.Errorf("vertical margin rows must be >= 0, got %d", options.VerticalMarginRows)
@@ -102,6 +111,13 @@ func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, char
 		mapColorName = options.MapColor
 		frameColorName = options.FrameColor
 		markerColorName = options.MarkerColor
+		if options.Viewport != nil {
+			viewport = *options.Viewport
+		}
+	}
+
+	if err := validateViewport(viewport); err != nil {
+		return "", err
 	}
 
 	colorEnabled, err := shouldColorize(colorMode)
@@ -123,9 +139,9 @@ func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, char
 	}
 
 	mapWidth := size
-	mapHeight := int(math.Round(float64(mapWidth) / (2.0 * charAspect)))
+	mapHeight := int(math.Round((float64(mapWidth) * viewport.latSpan() / viewport.lonSpan()) / charAspect))
 	if mapHeight <= 0 {
-		return "", fmt.Errorf("size=%d with char_aspect=%v produces zero map height", size, charAspect)
+		return "", fmt.Errorf("size=%d with char_aspect=%v and viewport produces zero map height", size, charAspect)
 	}
 
 	subsamplesPerCell := supersample * supersample
@@ -140,9 +156,9 @@ func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, char
 					x := float64(col) + (float64(sx)+0.5)/float64(supersample)
 					y := float64(row) + (float64(sy)+0.5)/float64(supersample)
 
-					lon := (x/float64(mapWidth))*360.0 - 180.0
+					lon := viewport.MinLon + (x/float64(mapWidth))*viewport.lonSpan()
 					t := y / float64(mapHeight)
-					lat := 90.0 - (180.0 * t)
+					lat := viewport.MaxLat - (viewport.latSpan() * t)
 
 					landSum += sampleLandValueUnchecked(mask, lon, lat)
 				}
@@ -161,7 +177,7 @@ func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, char
 
 	var markerMask []bool
 	if marker != nil {
-		markerMask, err = applyMarker(lines, mapWidth, mapHeight, *marker)
+		markerMask, err = applyMarker(lines, mapWidth, mapHeight, *marker, viewport)
 		if err != nil {
 			return "", err
 		}
@@ -180,6 +196,43 @@ func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, char
 	}
 
 	return buildPlainOutput(lines)
+}
+
+func defaultWorldViewport() Viewport {
+	return Viewport{
+		MinLon: -180.0,
+		MinLat: -90.0,
+		MaxLon: 180.0,
+		MaxLat: 90.0,
+	}
+}
+
+func (v Viewport) lonSpan() float64 {
+	return v.MaxLon - v.MinLon
+}
+
+func (v Viewport) latSpan() float64 {
+	return v.MaxLat - v.MinLat
+}
+
+func validateViewport(v Viewport) error {
+	if !isFinite(v.MinLon) || !isFinite(v.MinLat) || !isFinite(v.MaxLon) || !isFinite(v.MaxLat) {
+		return fmt.Errorf("viewport values must be finite")
+	}
+	if v.MinLon < -180.0 || v.MinLon > 180.0 || v.MaxLon < -180.0 || v.MaxLon > 180.0 {
+		return fmt.Errorf("viewport longitude must be in [-180, 180]")
+	}
+	if v.MinLat < -90.0 || v.MinLat > 90.0 || v.MaxLat < -90.0 || v.MaxLat > 90.0 {
+		return fmt.Errorf("viewport latitude must be in [-90, 90]")
+	}
+	if v.MinLon >= v.MaxLon {
+		return fmt.Errorf("viewport min lon must be less than max lon")
+	}
+	if v.MinLat >= v.MaxLat {
+		return fmt.Errorf("viewport min lat must be less than max lat")
+	}
+
+	return nil
 }
 
 func buildPlainOutput(lines [][]byte) (string, error) {
@@ -358,7 +411,7 @@ var ansi16ColorCodes = map[string]string{
 
 const ansi16ColorNamesCSV = "black, red, green, yellow, blue, magenta, cyan, white, bright-black, bright-red, bright-green, bright-yellow, bright-blue, bright-magenta, bright-cyan, bright-white"
 
-func applyMarker(lines [][]byte, mapWidth int, mapHeight int, marker Marker) ([]bool, error) {
+func applyMarker(lines [][]byte, mapWidth int, mapHeight int, marker Marker, viewport Viewport) ([]bool, error) {
 	if !isFinite(marker.Lon) || !isFinite(marker.Lat) {
 		return nil, fmt.Errorf("marker lon and lat must be finite")
 	}
@@ -384,11 +437,8 @@ func applyMarker(lines [][]byte, mapWidth int, mapHeight int, marker Marker) ([]
 
 	markerMask := make([]bool, mapWidth*mapHeight)
 
-	u := math.Mod((marker.Lon+180.0)/360.0, 1.0)
-	if u < 0.0 {
-		u += 1.0
-	}
-	v := clamp((90.0-marker.Lat)/180.0, 0.0, 1.0)
+	u := normalizeLongitude(marker.Lon, viewport)
+	v := clamp((viewport.MaxLat-marker.Lat)/viewport.latSpan(), 0.0, 1.0)
 
 	xCenter := int(math.Round(u * float64(mapWidth-1)))
 	yCenterActive := int(math.Round(v * float64(mapHeight-1)))
@@ -420,6 +470,19 @@ func applyMarker(lines [][]byte, mapWidth int, mapHeight int, marker Marker) ([]
 	markerMask[(yCenter*mapWidth)+xCenter] = true
 
 	return markerMask, nil
+}
+
+func normalizeLongitude(lon float64, viewport Viewport) float64 {
+	u := (lon - viewport.MinLon) / viewport.lonSpan()
+	if viewport.lonSpan() >= 360.0 {
+		u = math.Mod(u, 1.0)
+		if u < 0.0 {
+			u += 1.0
+		}
+		return u
+	}
+
+	return clamp(u, 0.0, 1.0)
 }
 
 func frameLines(lines [][]byte, width int) [][]byte {

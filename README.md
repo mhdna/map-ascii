@@ -56,6 +56,40 @@ options := &mapascii.RenderOptions{
 out, err := mapascii.RenderWorldASCIIWithOptions(mask, 80, 3, 2.0, nil, options)
 ```
 
+Render a geographic subset with a viewport bounding box:
+
+```go
+options := &mapascii.RenderOptions{
+	Viewport: &mapascii.Viewport{
+		MinLon: -20,
+		MinLat: -36,
+		MaxLon: 53,
+		MaxLat: 38,
+	},
+}
+
+out, err := mapascii.RenderWorldASCIIWithOptions(mask, 80, 3, 2.0, nil, options)
+```
+
+Use a built-in continent preset (library API):
+
+```go
+viewport, err := mapascii.ViewportForContinent(string(mapascii.ContinentAfrica))
+if err != nil {
+	log.Fatal(err)
+}
+
+options := &mapascii.RenderOptions{Viewport: &viewport}
+out, err := mapascii.RenderWorldASCIIWithOptions(mask, 80, 3, 2.0, nil, options)
+```
+
+List accepted continent names at runtime:
+
+```go
+fmt.Println(mapascii.ContinentNames())
+// [africa antarctica asia europe north-america south-america oceania]
+```
+
 Stream animated frames with a callback (import `context` in your program):
 
 ```go
@@ -98,6 +132,18 @@ Use a specific mask:
 
 ```bash
 go run ./cmd/map-ascii --mask data/landmask_3600x1800.png --size 120
+```
+
+Render a continent preset:
+
+```bash
+go run ./cmd/map-ascii --size 90 --continent africa
+```
+
+Render a custom bounding box:
+
+```bash
+go run ./cmd/map-ascii --size 90 --bbox=-20,-36,53,38
 ```
 
 Render with no top/bottom margin and a frame:
@@ -189,6 +235,8 @@ Supported color names:
 - `--animate-style` animation style: `pulse-color`, `blink` (default `pulse-color`)
 - `--animate-duration` animation duration (`0` means until interrupted)
 - `--mask` path to a PNG land mask (optional; defaults to local `data/landmask_3600x1800.png` with embedded fallback)
+- `--continent` preset viewport: `africa`, `antarctica`, `asia`, `europe`, `north-america`, `south-america`, `oceania`
+- `--bbox` viewport bounding box as `minLon,minLat,maxLon,maxLat`
 - `--output` optional output text file
 
 ## Notes
@@ -196,5 +244,7 @@ Supported color names:
 - Expected mask alignment:
   - x-axis maps lon `-180..180`
   - y-axis maps lat `90..-90`
+- `--continent` and `--bbox` are mutually exclusive.
+- `--continent australia` is accepted as an alias of `oceania`.
 - By default output has 2 empty rows of top/bottom margin; use `--margin-y` to change it.
 - Use `--frame` to wrap the output in `+---+` and `|   |` style borders.

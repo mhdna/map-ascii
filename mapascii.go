@@ -21,6 +21,8 @@ type Marker = internal.Marker
 
 type RenderOptions = internal.RenderOptions
 
+type Viewport = internal.Viewport
+
 type AnimationStyle = internal.AnimationStyle
 
 type AnimationOptions = internal.AnimationOptions
