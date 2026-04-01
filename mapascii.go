@@ -82,6 +82,16 @@ func RenderWorldASCIIWithOptions(mask *LandMask, size int, supersample int, char
 	return internal.RenderWorldASCIIWithOptions(mask, size, supersample, charAspect, marker, options)
 }
 
+func StreamWorldASCIIAnimationSingle(
+	ctx context.Context, mask *LandMask,
+	size, supersample int, charAspect float64,
+	marker *Marker, renderOpts *RenderOptions,
+	animOpts *AnimationOptions, emit func(Frame) error,
+) error {
+	return StreamWorldASCIIAnimation(ctx, mask, size, supersample, charAspect,
+		[]*Marker{marker}, renderOpts, animOpts, emit)
+}
+
 func StreamWorldASCIIAnimation(
 	ctx context.Context,
 	mask *LandMask,
