@@ -29,13 +29,189 @@ type Frame struct {
 	Text string
 }
 
+// overlayMarkerLayer finds cells that differ between base and layer,
+// and applies those differences onto dst.
+// base: world with no markers
+// dst:  accumulated result so far (may already have markers stamped)
+// layer: world with one new marker rendered
+func overlayMarkerLayer(base, dst, layer string) string {
+	baseRunes := []rune(base)
+	dstRunes := []rune(dst)
+	layerRunes := []rune(layer)
+
+	if len(baseRunes) != len(layerRunes) || len(baseRunes) != len(dstRunes) {
+		// Dimensions don't match, return dst unchanged
+		return dst
+	}
+
+	out := make([]rune, len(dstRunes))
+	copy(out, dstRunes)
+
+	for i := range baseRunes {
+		if layerRunes[i] != baseRunes[i] {
+			out[i] = layerRunes[i]
+		}
+	}
+	return string(out)
+}
+
+func renderAnimationFrameMulti(
+	mask *LandMask,
+	size int,
+	supersample int,
+	charAspect float64,
+	markers []*Marker,
+	renderOpts *RenderOptions,
+	style AnimationStyle,
+	frameIdx int,
+	pulseA string,
+	pulseB string,
+) (string, error) {
+	// --- Resolve options (mirrors RenderWorldASCIIWithOptions logic) ---
+	verticalMarginRows := DefaultVerticalMarginRows
+	frame := false
+	colorMode := colorModeNever
+	mapColorName := ""
+	frameColorName := ""
+	viewport := defaultWorldViewport()
+
+	if renderOpts != nil {
+		if renderOpts.VerticalMarginRows < 0 {
+			return "", fmt.Errorf("vertical margin rows must be >= 0, got %d", renderOpts.VerticalMarginRows)
+		}
+		if renderOpts.VerticalPaddingRows < 0 {
+			return "", fmt.Errorf("vertical padding rows must be >= 0, got %d", renderOpts.VerticalPaddingRows)
+		}
+		if renderOpts.VerticalMarginRows != 0 {
+			verticalMarginRows = renderOpts.VerticalMarginRows
+		} else {
+			verticalMarginRows = renderOpts.VerticalPaddingRows
+		}
+		frame = renderOpts.Frame
+		if renderOpts.ColorMode != "" {
+			colorMode = renderOpts.ColorMode
+		}
+		mapColorName = renderOpts.MapColor
+		frameColorName = renderOpts.FrameColor
+		if renderOpts.Viewport != nil {
+			viewport = *renderOpts.Viewport
+		}
+	}
+
+	if err := validateViewport(viewport); err != nil {
+		return "", err
+	}
+
+	colorEnabled, err := shouldColorize(colorMode)
+	if err != nil {
+		return "", err
+	}
+
+	mapColor, err := colorSequenceForName(mapColorName, "map color")
+	if err != nil {
+		return "", err
+	}
+	frameColor, err := colorSequenceForName(frameColorName, "frame color")
+	if err != nil {
+		return "", err
+	}
+
+	// --- Resolve marker color for this frame ---
+	markerColorName := ""
+	switch style {
+	case AnimationStyleBlink:
+		// color stays as-is; visibility toggled by whether we stamp markers
+		if renderOpts != nil {
+			markerColorName = renderOpts.MarkerColor
+		}
+	case AnimationStylePulseColor:
+		if frameIdx%2 == 0 {
+			markerColorName = pulseA
+		} else {
+			markerColorName = pulseB
+		}
+	default:
+		return "", fmt.Errorf("unsupported animation style: %s", style)
+	}
+
+	markerColor, err := colorSequenceForName(markerColorName, "marker color")
+	if err != nil {
+		return "", err
+	}
+
+	// --- Render base grid ---
+	mapWidth := size
+	mapHeight := int(math.Round((float64(mapWidth) * viewport.latSpan() / viewport.lonSpan()) / charAspect))
+	if mapHeight <= 0 {
+		return "", fmt.Errorf("size=%d with char_aspect=%v and viewport produces zero map height", size, charAspect)
+	}
+
+	subsamplesPerCell := supersample * supersample
+	lines := make([][]byte, 0, mapHeight)
+	for row := 0; row < mapHeight; row++ {
+		line := make([]byte, mapWidth)
+		for col := 0; col < mapWidth; col++ {
+			landSum := 0.0
+			for sy := 0; sy < supersample; sy++ {
+				for sx := 0; sx < supersample; sx++ {
+					x := float64(col) + (float64(sx)+0.5)/float64(supersample)
+					y := float64(row) + (float64(sy)+0.5)/float64(supersample)
+					lon := viewport.MinLon + (x/float64(mapWidth))*viewport.lonSpan()
+					t := y / float64(mapHeight)
+					lat := viewport.MaxLat - (viewport.latSpan() * t)
+					landSum += sampleLandValueUnchecked(mask, lon, lat)
+				}
+			}
+			landFraction := landSum / float64(subsamplesPerCell)
+			ch, err := CharForLandFraction(landFraction)
+			if err != nil {
+				return "", err
+			}
+			line[col] = ch
+		}
+		lines = append(lines, line)
+	}
+
+	// --- Stamp all markers, accumulate a single combined mask ---
+	combinedMask := make([]bool, mapWidth*mapHeight)
+
+	if style != AnimationStyleBlink || frameIdx%2 == 0 {
+		for _, m := range markers {
+			markerMask, err := applyMarker(lines, mapWidth, mapHeight, *m, viewport)
+			if err != nil {
+				return "", err
+			}
+			for i, v := range markerMask {
+				if v {
+					combinedMask[i] = true
+				}
+			}
+		}
+	}
+
+	// --- Frame + margins ---
+	if frame {
+		lines = frameLines(lines, mapWidth)
+	}
+	if verticalMarginRows > 0 {
+		lines = addVerticalMargins(lines, verticalMarginRows)
+	}
+
+	// --- Serialize ---
+	useColor := colorEnabled && (mapColor != "" || frameColor != "" || markerColor != "")
+	if useColor {
+		return buildColoredOutput(lines, mapWidth, mapHeight, verticalMarginRows, frame, combinedMask, mapColor, frameColor, markerColor)
+	}
+	return buildPlainOutput(lines)
+}
+
 func StreamWorldASCIIAnimation(
 	ctx context.Context,
 	mask *LandMask,
 	size int,
 	supersample int,
 	charAspect float64,
-	marker *Marker,
+	markers []*Marker,
 	renderOpts *RenderOptions,
 	animOpts *AnimationOptions,
 	emit func(Frame) error,
@@ -43,8 +219,13 @@ func StreamWorldASCIIAnimation(
 	if emit == nil {
 		return fmt.Errorf("emit callback must not be nil")
 	}
-	if marker == nil {
-		return fmt.Errorf("marker must not be nil")
+	if len(markers) == 0 {
+		return fmt.Errorf("at least one marker must be provided")
+	}
+	for i, m := range markers {
+		if m == nil {
+			return fmt.Errorf("marker at index %d must not be nil", i)
+		}
 	}
 
 	if ctx == nil {
@@ -87,7 +268,8 @@ func StreamWorldASCIIAnimation(
 		default:
 		}
 
-		frameText, err := renderAnimationFrame(mask, size, supersample, charAspect, marker, renderOpts, effectiveStyle, frameIdx, pulseA, pulseB)
+		// Render base frame once, then composite all markers onto it
+		frameText, err := renderAnimationFrameMulti(mask, size, supersample, charAspect, markers, renderOpts, effectiveStyle, frameIdx, pulseA, pulseB)
 		if err != nil {
 			return err
 		}

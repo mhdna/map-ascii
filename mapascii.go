@@ -88,10 +88,10 @@ func StreamWorldASCIIAnimation(
 	size int,
 	supersample int,
 	charAspect float64,
-	marker *Marker,
+	markers []*Marker,
 	renderOpts *RenderOptions,
 	animOpts *AnimationOptions,
 	emit func(Frame) error,
 ) error {
-	return internal.StreamWorldASCIIAnimation(ctx, mask, size, supersample, charAspect, marker, renderOpts, animOpts, emit)
+	return internal.StreamWorldASCIIAnimation(ctx, mask, size, supersample, charAspect, markers, renderOpts, animOpts, emit)
 }
