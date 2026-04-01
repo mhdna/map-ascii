@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	mapascii "github.com/Kivayan/map-ascii"
+	mapascii "github.com/mhdna/map-ascii"
 )
 
 func main() {

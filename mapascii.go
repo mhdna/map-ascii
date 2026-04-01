@@ -9,7 +9,7 @@ import (
 	"image/color"
 	_ "image/png"
 
-	internal "github.com/Kivayan/map-ascii/internal"
+	internal "github.com/mhdna/map-ascii/internal"
 )
 
 //go:embed data/landmask_3600x1800.png

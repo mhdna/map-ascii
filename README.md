@@ -2,12 +2,12 @@
 
 Go CLI for generating an ASCII world map from a pre-generated PNG land mask.
 
-Module path: `github.com/Kivayan/map-ascii`
+Module path: `github.com/mhdna/map-ascii`
 
 ## Install CLI
 
 ```bash
-go install github.com/Kivayan/map-ascii/cmd/map-ascii@latest
+go install github.com/mhdna/map-ascii/cmd/map-ascii@latest
 ```
 
 Then run:
@@ -25,7 +25,7 @@ import (
 	"fmt"
 	"log"
 
-	mapascii "github.com/Kivayan/map-ascii"
+	mapascii "github.com/mhdna/map-ascii"
 )
 
 func main() {

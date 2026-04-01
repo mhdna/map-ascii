@@ -1,3 +1,3 @@
-module github.com/Kivayan/map-ascii
+module github.com/mhdna/map-ascii
 
 go 1.22
